@@ -1,0 +1,197 @@
+#!/usr/bin/python
+# Forban - a simple link-local opportunistic p2p free software
+#
+# For more information : http://www.foo.be/forban/
+#
+# Copyright (C) 2009-2012 Alexandre Dulaunoy - http://www.foo.be/
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+import sys
+import os
+import shutil
+import platform
+import signal
+import subprocess
+import ConfigParser
+import time
+
+def guesspath():
+    pp = os.path.realpath(sys.argv[0])
+    lpath = os.path.split(pp)
+    bis = os.path.split(lpath[0])
+    return bis[0]
+
+config = ConfigParser.RawConfigParser()
+config.read(os.path.join(guesspath(),"cfg","forban.cfg"))
+
+try:
+    forbanpath = config.get('global','path')
+except ConfigParser.NoSectionError:
+    print "Forban config file is missing or incorrect"
+    print "You should go into ../cfg/ and cp forban.cfg-sample forban.cfg"
+    forbanpath = os.path.join(guesspath())
+except ConfigParser.NoOptionError:
+    forbanpath = os.path.join(guesspath())
+
+def service_start(servicename = None):
+    if servicename is not None:
+        service = servicename+".py"
+        servicepath = os.path.join(guesspath(),"bin",service)
+        proc =  subprocess.Popen(["python",servicepath])
+        time.sleep(0.15)
+        return proc.pid
+    return False
+
+def writepid (processname = None, pid = None):
+    pidpath = os.path.join(forbanpath,"var",processname+".pid")
+
+    if processname is not None and pid is not None:
+        f = open (pidpath,"w")
+        f.write(str(pid))
+        f.close()
+        return True
+    else:
+        return False
+
+def checkpid (servicename = None):
+    pidpath = os.path.join(forbanpath,"var",servicename+".pid")
+
+    if os.path.exists(pidpath):
+        return True
+    else:
+        return False
+
+def rmpid (processname = None):
+    pidpath = os.path.join(forbanpath,"var",processname+".pid")
+    if os.path.exists(pidpath):
+        os.unlink(pidpath)
+        return True
+    else:
+        return False
+
+def pidof(processname = None):
+    pidpath = os.path.join(forbanpath,"var",processname+".pid")
+    if processname is not None and os.path.exists(pidpath):
+        f = open (pidpath)
+        pid = f.read()
+        f.close()
+        return int(pid)
+    else:
+        return False
+
+def processexists(pid):
+    # Use the canonical POSIX way to check an existing process
+    try: return os.kill(pid,0)
+    except OSError,e:
+        if e.errno == 3: return True # process is not existing
+        elif e.errnor == 1: return False # cannot send signal to process
+        else: raise
+
+def deleteloots():
+    lootpath = os.path.join(forbanpath,"var","loot")
+    if not os.path.exists(lootpath):
+        return False
+    for dirs in os.listdir(lootpath):
+        lootdir = os.path.join(lootpath,dirs)
+        print lootdir+" removed..."
+        shutil.rmtree(lootdir)
+
+def usage():
+    print "forbanctl (start|stop|restart|cleanup|lootcleanup)"
+    exit (1)
+
+if len(sys.argv) < 2:
+    usage()
+
+forban_services = ["forban_discover", "forban_announce", "forban_share", "forban_opportunistic"]
+
+try:
+    forbanmode = config.get('global','mode')
+except ConfigParser.NoOptionError:
+    forbanmode = "opportunistic"
+except ConfigParser.NoSectionError:
+    forbanmode = "opportunistic"
+
+def Start():
+    print "Starting Forban services..."
+    retval=True
+    for service in forban_services:
+        if not ((forbanmode == "shared")  and (service == "forban_opportunistic")):
+            print service+" is starting with pid:"
+            if not checkpid(servicename = service):
+                pid = service_start(servicename = service)
+                writepid(processname = service, pid = pid)
+                print pidof(processname=service)
+            else:
+                print service+" could not be started (pid exists)"
+                retval=False
+
+    return retval
+
+def CleanUp():
+    print "Cleaning up..."
+    retval=True
+    for service in forban_services:
+        pid = pidof(processname=service)
+        print pid
+        if processexists(pid):
+            print service+" DO NOT exist - delete pid"
+            rmpid(processname=service)
+        elif pid:
+            print service+" DO exist - kill and delete pid"
+            os.kill(pid, signal.SIGKILL)
+            rmpid(processname=service)
+        else:
+            print "Not PID"
+        retval=False
+
+    return retval
+
+def Stop():
+    print "Stopping Forban services..."
+    retval=True
+    for service in forban_services:
+        pid = pidof(processname=service)
+        if pid:
+            if platform.system() == "Windows":
+                import win32api
+                import win32con
+                phandle = win32api.OpenProcess( win32con.PROCESS_TERMINATE, 0, int(pid))
+                win32api.TerminateProcess( phandle, 0)
+                win32api.CloseHandle( phandle)
+                rmpid(processname=service)
+            else:
+                try:
+                    os.kill(int(pid), signal.SIGKILL)
+                except OSError, e:
+                    print service+  " unsuccessfully stopped"
+                    retval=False
+                print service
+                rmpid(processname=service)
+    return retval
+
+if sys.argv[1] == "start":
+    Start()
+elif sys.argv[1] == "cleanup":
+    CleanUp()
+elif sys.argv[1] == "lootcleanup":
+    deleteloots()
+elif sys.argv[1] == "stop":
+    Stop()
+elif sys.argv[1] == "restart":
+    Stop()
+    Start()
+else:
+    usage()

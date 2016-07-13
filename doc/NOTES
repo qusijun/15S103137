@@ -1,0 +1,58 @@
+
+== protocol ==
+
+* only fetch index where there is an update
+  [DONE] the HMAC is now announced to help Forban to discover updated index
+
+== portability ==
+
+* include a default CherryPy in the package
+  [DONE] done now in ./lib/ext/
+* or remove CherryPy requirements (and/or (re)implement the minimal HTTP services requirement)
+** -> to just rely on a standard Python with no additional module (Nokia N900 test)
+
+* win32 test and support
+  [DONE] in 0.0.18 / issue with os.rename in Windows + win32 killing process added
+  [OPEN] more test to be done in opportunistic mode
+  [OPEN] issue with concurrent file access (moving shared data access to sqlite?)
+* (3) creation of easy to install packages
+** Pyinstaller usage to build executable from the Python scripts
+* Forban USB key for windows, linux or macos user (Forban on a key) (link:3)
+* Standalone USB key with http://distro.ibiblio.org/tinycorelinux/welcome.html
+  [OPEN-TEST]
+
+== opportunistic ==
+
+* limit the timeout when the HTTP service is not responding
+  [DONE] socket.setdefaulttimeout(10) is globally set in the fetching library
+  -> Maybe this could be variable following the stability of the hosts discovered / link stability
+* be sure that the list of host to contact is randomized (-> issues of bootstrapping a lot of local Forban services)
+* calculate a weight factor based on the content proposed by the different Forban (link:1)
+* variable numbers of parallel fetcher (link:1)
+** -> 2 fetchers idea (one starting with small files and one starting with large files)
+* reduce time to flood the announces (or make it variable ?)
+  [DONE] 10sec now default but can be configured
+  [DONE] opportunistic wake-up is function of the announce time
+* (1) dynamic bandwidth usage following bandwidth usage
+** estimate available bandwidth via index fetching at regular interval
+** limit bandwidth used based on the estimated bandwidth and a configured
+   value by the Forban node operator
+* status update to know what file is currently downloaded
+
+== opportunistic_fs ==
+
+* allow Forban to share files via removable devices
+** a common "FORBAN" directory name is created
+** the method can be used to import files into Forban nodes
+** configuration to describe if the input from removable
+devices is two ways or just one way (from or to the device)
+
+== general ==
+
+* publish as DNS records internal IP address to overcome network
+  limitation where the broadcast/multicast is blocked. The format
+  could be something like <uuid>.u.forban.info and with a search
+  engine with name and location. (from a discussion with David Durvaux)
+* publish Forban local index to a remote server
+* anonymous sharing outside the local scope (via Internet)
+* on request download to allow people to request files (via Internet)
